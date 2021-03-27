@@ -105,5 +105,146 @@ ngw = [
 nacl = [
   {
     tags = { Name = "nacl-private"}
+    subnet_ids_index = [0,1] # index id of variable subnets_para
+    egress = [
+      {
+        protocol = "-1"
+        rule_num = 100
+        action = "allow"
+        cidr_block = "0.0.0.0/0"
+      },
+    ]
+    ingress = [
+      {
+        protocol = "tcp"
+        rule_num = 100
+        action = "allow"
+        cidr_block = "10.10.0.0/23"
+        from_port = 80
+        to_port = 80
+      },
+      {
+        protocol = "tcp"
+        rule_num = 200
+        action = "allow"
+        cidr_block = "10.10.0.0/23"
+        from_port = 22
+        to_port = 22
+      },
+    ]
+  },
+  {
+    tags = { Name = "nacl-db"}
+    subnet_ids_index = [4,5] # index id of variable subnets_para
+    egress = [
+      {
+        protocol = "-1"
+        rule_num = 100
+        action = "allow"
+        cidr_block = "0.0.0.0/0"
+      },
+    ]
+    ingress = [
+      {
+        protocol = "tcp"
+        rule_num = 100
+        action = "allow"
+        cidr_block = "10.10.2.0/23"
+        from_port = 3306
+        to_port = 3306
+      },
+      {
+        protocol = "tcp"
+        rule_num = 200
+        action = "allow"
+        cidr_block = "10.10.2.0/23"
+        from_port = 22
+        to_port = 22
+      },
+    ]
+  },
+]
+
+sg = [
+  {
+    name = "tf-sg-public"
+    description = "Allow public inbound traffic"
+    tags = { Name = "sg-public"}
+    egress = [
+      {
+        protocol = "-1"
+        cidr_blocks  = ["0.0.0.0/0"]
+      },
+    ]
+    ingress = [
+      {
+        protocol = "tcp"
+        cidr_blocks  = ["38.129.48.138/32", "24.37.254.72/29"]
+        from_port = 80
+        to_port = 80
+        self = true
+        security_groups = []
+        prefix_list_ids_index = []
+      },
+      {
+        protocol = "tcp"
+        cidr_blocks  = ["38.129.48.138/32", "24.37.254.72/29"]
+        from_port = 22
+        to_port = 22
+        self = false
+        security_groups = []
+        prefix_list_ids_index = []
+      },
+    ]
+  },
+  {
+    name = "tf-sg-private"
+    description = "Allow private inbound traffic"
+    tags = { Name = "sg-private"}
+    egress = [
+      {
+        protocol = "-1"
+        cidr_blocks  = ["0.0.0.0/0"]
+      },
+    ]
+    ingress = [
+      {
+        protocol = "tcp"
+        cidr_blocks  = []
+        from_port = 80
+        to_port = 80
+        self = true
+        security_groups = []
+        prefix_list_ids_index = [0]
+      },
+      {
+        protocol = "tcp"
+        cidr_blocks  = []
+        from_port = 22
+        to_port = 22
+        self = true
+        security_groups = []
+        prefix_list_ids_index = [0]
+      },
+    ]
+  },
+]
+
+
+prefix_list = [
+  {
+    name = "tf-prefixlist-public"
+    address_family = "IPv4"
+    max_entries    = 10
+    entry = [
+      {
+        subnet_id_index = 2
+        description = "cidr of subnet public 1"
+      },
+      {
+        cidr = "10.10.3.0/24"
+        description = "cidr of subnet public 2"
+      },
+    ]
   }
 ]

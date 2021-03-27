@@ -44,3 +44,13 @@ variable "nacl" {
   type = list(any)
   description = "network acl"
 }
+
+variable "sg" {
+  type = list(any)
+  description = "security groups"
+}
+
+variable "prefix_list" {
+  type = list(any)
+  description = "prefix_list"
+}

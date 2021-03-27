@@ -61,13 +61,9 @@ resource "aws_internet_gateway" "this" {
 
 ####################################################################################
 #
-# fetch azs' info and create subnets
+# create subnets
 #
 ####################################################################################
-
-data "aws_availability_zones" "available" {
-  state = "available"
-}
 
 resource "aws_subnet" "this" {
   count = var.create_vpc && length(var.subnets_para) > 0 ? length(var.subnets_para) : 0
@@ -162,27 +158,107 @@ resource "aws_eip" "this" {
 ####################################################################################
 
 resource "aws_network_acl" "this" {
+  count = var.create_vpc && length(var.nacl) > 0 ? length(var.nacl) : 0
+
   vpc_id = aws_vpc.this[0].id
 
-  egress {
-    protocol   = "tcp"
-    rule_no    = 200
-    action     = "allow"
-    cidr_block = "10.3.0.0/18"
-    from_port  = 443
-    to_port    = 443
+  # associate network acl to subnets via the index number of resource aws_subnet.this
+  subnet_ids = [ for s in var.nacl[count.index].subnet_ids_index : aws_subnet.this[s].id ]
+
+  dynamic "egress" {
+    for_each = contains(keys(var.nacl[count.index]), "egress") ? var.nacl[count.index].egress : []
+
+    content {
+      protocol   = egress.value.protocol
+      rule_no    = egress.value.rule_num
+      action     = egress.value.action
+      cidr_block = egress.value.cidr_block
+      from_port  = egress.value.protocol == "-1" ? 0 : egress.value.from_port
+      to_port    = egress.value.protocol == "-1" ? 0 : egress.value.to_port
+    }
   }
 
-  ingress {
-    protocol   = "tcp"
-    rule_no    = 100
-    action     = "allow"
-    cidr_block = "10.3.0.0/18"
-    from_port  = 80
-    to_port    = 80
+  dynamic "ingress" {
+    for_each = contains(keys(var.nacl[count.index]), "ingress") ? var.nacl[count.index].ingress : []
+
+    content {
+      protocol   = ingress.value.protocol
+      rule_no    = ingress.value.rule_num
+      action     = ingress.value.action
+      cidr_block = ingress.value.cidr_block
+      from_port  = ingress.value.protocol == "-1" ? 0 : ingress.value.from_port
+      to_port    = ingress.value.protocol == "-1" ? 0 : ingress.value.to_port
+    }
   }
 
-  tags = {
-    Name = "main"
+  tags = merge(var.tag_name, lookup(var.nacl[count.index], "tags", {}))
+}
+
+####################################################################################
+#
+# create security groups
+#
+####################################################################################
+
+resource "aws_security_group" "this" {
+  count = var.create_vpc && length(var.sg) > 0 ? length(var.sg) : 0
+
+  name        = var.sg[count.index].name
+  description = var.sg[count.index].description
+  vpc_id      = aws_vpc.this[0].id
+
+  dynamic "egress" {
+    for_each = contains(keys(var.sg[count.index]), "egress") ? var.sg[count.index].egress : []
+
+    content {
+      protocol   = egress.value.protocol
+      cidr_blocks  = egress.value.cidr_blocks 
+      from_port  = egress.value.protocol == "-1" ? 0 : egress.value.from_port
+      to_port    = egress.value.protocol == "-1" ? 0 : egress.value.to_port
+      self = lookup(egress.value, "self", false)
+      security_groups = contains(keys(egress.value), "security_groups") ? egress.value.security_groups : []
+      prefix_list_ids = contains(keys(egress.value), "prefix_list_ids_index") ? [ for s in egress.value.prefix_list_ids_index : aws_ec2_managed_prefix_list.this[s].id] : []
+    }
   }
+
+  dynamic "ingress" {
+    for_each = contains(keys(var.sg[count.index]), "ingress") ? var.sg[count.index].ingress : []
+
+    content {
+      protocol   = ingress.value.protocol
+      cidr_blocks  = ingress.value.cidr_blocks 
+      from_port  = ingress.value.protocol == "-1" ? 0 : ingress.value.from_port
+      to_port    = ingress.value.protocol == "-1" ? 0 : ingress.value.to_port
+      self = lookup(ingress.value, "self", false)
+      security_groups = contains(keys(ingress.value), "security_groups") ? ingress.value.security_groups : []
+      prefix_list_ids = contains(keys(ingress.value), "prefix_list_ids_index") ? [ for s in ingress.value.prefix_list_ids_index : aws_ec2_managed_prefix_list.this[s].id] : []
+    }
+  }
+
+  tags = merge(var.tag_name, lookup(var.sg[count.index], "tags", {}))
+}
+
+####################################################################################
+#
+# create prefix lists and use them in security groups
+#
+####################################################################################
+
+resource "aws_ec2_managed_prefix_list" "this" {
+  count = var.create_vpc && length(var.prefix_list) > 0 ? length(var.prefix_list) : 0
+
+  name           = var.prefix_list[count.index].name
+  address_family = var.prefix_list[count.index].address_family
+  max_entries    = var.prefix_list[count.index].max_entries
+
+  dynamic "entry" {
+    for_each = contains(keys(var.prefix_list[count.index]), "entry") ? var.prefix_list[count.index].entry : []
+
+    content {
+      cidr        = contains(keys(entry.value), "subnet_id_index") ? aws_subnet.this[entry.value.subnet_id_index].cidr_block : entry.value.cidr
+      description = lookup(entry.value, "description", null)
+    }
+  }
+
+  tags = merge(var.tag_name, lookup(var.prefix_list[count.index], "tags", {}))
 }
